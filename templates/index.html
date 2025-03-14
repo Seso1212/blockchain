@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blockchain Demo</title>
+    <title>ScremyCoin (SCR) - Blockchain Demo</title>
     <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
     <link rel="stylesheet" href="/static/css/custom.css">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="#">Blockchain Demo</a>
+            <a class="navbar-brand" href="#">ScremyCoin (SCR)</a>
         </div>
     </nav>
 
@@ -19,23 +19,38 @@
             <div class="col-md-6">
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">New Transaction</h5>
+                        <h5 class="card-title mb-0">Wallet</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="walletAddress" class="form-label">Your Wallet Address</label>
+                            <input type="text" class="form-control" id="walletAddress" placeholder="Create a unique wallet address">
+                            <small class="text-muted">This is your unique identifier for receiving SCR coins.</small>
+                        </div>
+                        <button onclick="checkBalance()" class="btn btn-info">Check Balance</button>
+                        <div id="balanceDisplay" class="mt-3"></div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Send SCR</h5>
                     </div>
                     <div class="card-body">
                         <form id="transactionForm">
                             <div class="mb-3">
-                                <label for="sender" class="form-label">Sender</label>
+                                <label for="sender" class="form-label">From (Your Wallet Address)</label>
                                 <input type="text" class="form-control" id="sender" required>
                             </div>
                             <div class="mb-3">
-                                <label for="recipient" class="form-label">Recipient</label>
+                                <label for="recipient" class="form-label">To (Recipient's Wallet Address)</label>
                                 <input type="text" class="form-control" id="recipient" required>
                             </div>
                             <div class="mb-3">
-                                <label for="amount" class="form-label">Amount</label>
+                                <label for="amount" class="form-label">Amount (SCR)</label>
                                 <input type="number" class="form-control" id="amount" step="0.01" required>
                             </div>
-                            <button type="submit" class="btn btn-primary">Submit Transaction</button>
+                            <button type="submit" class="btn btn-primary">Send SCR</button>
                         </form>
                     </div>
                 </div>
@@ -46,10 +61,12 @@
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label for="minerAddress" class="form-label">Miner Address</label>
+                            <label for="minerAddress" class="form-label">Mining Wallet Address</label>
                             <input type="text" class="form-control" id="minerAddress" required>
+                            <small class="text-muted">Earn 0.5 SCR per block (approximately every 30 seconds)</small>
                         </div>
-                        <button id="mineButton" class="btn btn-success">Mine Block</button>
+                        <button id="mineButton" class="btn btn-success">Start Mining</button>
+                        <div id="miningStatus" class="mt-3"></div>
                     </div>
                 </div>
             </div>

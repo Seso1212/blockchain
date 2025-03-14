@@ -24,10 +24,12 @@ class Block:
         return hashlib.sha256(block_string).hexdigest()
 
 class Blockchain:
-    def __init__(self, difficulty: int = 4):
+    def __init__(self, difficulty: int = 2):  # Reduced difficulty for ~30s blocks
         self.chain = []
         self.pending_transactions = []
         self.difficulty = difficulty
+        self.mining_reward = 0.5  # 0.5 SCR mining reward
+        self.balances = {}  # Track wallet balances
         self.create_genesis_block()
 
     def create_genesis_block(self):
@@ -38,6 +40,12 @@ class Blockchain:
         return self.chain[-1]
 
     def add_transaction(self, sender: str, recipient: str, amount: float):
+        # Verify sender has enough balance
+        if sender != "network":  # Skip check for mining rewards
+            sender_balance = self.get_balance(sender)
+            if sender_balance < amount:
+                raise ValueError(f"Insufficient balance. Available: {sender_balance} SCR")
+
         self.pending_transactions.append({
             'sender': sender,
             'recipient': recipient,
@@ -45,11 +53,12 @@ class Blockchain:
         })
 
     def mine_pending_transactions(self, miner_address: str) -> Block:
-        # Create an empty block with just the mining reward if no transactions
-        if not self.pending_transactions:
-            transactions = [{'sender': 'network', 'recipient': miner_address, 'amount': 10.0}]
-        else:
-            transactions = self.pending_transactions
+        # Always include mining reward transaction
+        transactions = [{'sender': 'network', 'recipient': miner_address, 'amount': self.mining_reward}]
+
+        # Add pending transactions if any exist
+        if self.pending_transactions:
+            transactions.extend(self.pending_transactions)
 
         new_block = Block(
             len(self.chain),
@@ -61,12 +70,22 @@ class Blockchain:
         new_block = self.proof_of_work(new_block)
         self.chain.append(new_block)
 
-        # Clear pending transactions and add mining reward for next block
-        self.pending_transactions = [
-            {'sender': 'network', 'recipient': miner_address, 'amount': 10.0}
-        ]
+        # Update balances
+        for tx in transactions:
+            self._update_balance(tx['sender'], tx['recipient'], tx['amount'])
+
+        # Clear pending transactions
+        self.pending_transactions = []
 
         return new_block
+
+    def _update_balance(self, sender: str, recipient: str, amount: float):
+        if sender != "network":  # Don't deduct from network (mining rewards)
+            self.balances[sender] = self.balances.get(sender, 0) - amount
+        self.balances[recipient] = self.balances.get(recipient, 0) + amount
+
+    def get_balance(self, address: str) -> float:
+        return self.balances.get(address, 0)
 
     def proof_of_work(self, block: Block) -> Block:
         target = "0" * self.difficulty

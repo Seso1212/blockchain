@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Form submission for new transaction
     document.getElementById('transactionForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const transaction = {
             sender: document.getElementById('sender').value,
             recipient: document.getElementById('recipient').value,
@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (response.ok) {
                 alert('Transaction added successfully!');
                 this.reset();
+                checkBalance();
             } else {
                 alert(`Error: ${result.error}`);
             }
@@ -36,13 +37,71 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Mining
-    document.getElementById('mineButton').addEventListener('click', async function() {
+    let miningInterval = null;
+    document.getElementById('mineButton').addEventListener('click', function() {
+        const button = this;
         const minerAddress = document.getElementById('minerAddress').value;
+        const miningStatus = document.getElementById('miningStatus');
+
         if (!minerAddress) {
-            alert('Please enter a miner address');
+            alert('Please enter a mining wallet address');
             return;
         }
 
+        if (button.textContent === 'Start Mining') {
+            button.textContent = 'Stop Mining';
+            button.classList.replace('btn-success', 'btn-danger');
+            miningStatus.innerHTML = '<div class="alert alert-info">Mining in progress... (0.5 SCR per block)</div>';
+
+            // Start mining every 30 seconds
+            mine(); // Mine immediately
+            miningInterval = setInterval(mine, 30000); // Then every 30 seconds
+        } else {
+            stopMining();
+        }
+    });
+
+    // Refresh chain
+    document.getElementById('refreshChain').addEventListener('click', function() {
+        refreshChain();
+        validateChain();
+    });
+
+    // Check balance function
+    window.checkBalance = async function() {
+        const address = document.getElementById('walletAddress').value;
+        if (!address) {
+            alert('Please enter a wallet address');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/balance/${address}`);
+            const data = await response.json();
+            const balanceDisplay = document.getElementById('balanceDisplay');
+            balanceDisplay.innerHTML = `
+                <div class="alert alert-success">
+                    Balance: ${data.balance} ${data.unit}
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error checking balance:', error);
+            alert('Failed to check balance');
+        }
+    };
+
+    function stopMining() {
+        const button = document.getElementById('mineButton');
+        const miningStatus = document.getElementById('miningStatus');
+
+        clearInterval(miningInterval);
+        button.textContent = 'Start Mining';
+        button.classList.replace('btn-danger', 'btn-success');
+        miningStatus.innerHTML = '<div class="alert alert-secondary">Mining stopped</div>';
+    }
+
+    async function mine() {
+        const minerAddress = document.getElementById('minerAddress').value;
         try {
             const response = await fetch('/mine', {
                 method: 'POST',
@@ -54,30 +113,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const result = await response.json();
             if (response.ok) {
-                alert(result.message);
                 refreshChain();
                 validateChain();
+                checkBalance();
             } else {
-                alert(`Error: ${result.error}`);
+                console.error('Mining failed:', result.error);
+                stopMining();
             }
         } catch (error) {
-            alert('Mining failed');
-            console.error('Error:', error);
+            console.error('Mining error:', error);
+            stopMining();
         }
-    });
-
-    // Refresh chain
-    document.getElementById('refreshChain').addEventListener('click', function() {
-        refreshChain();
-        validateChain();
-    });
+    }
 });
 
 async function refreshChain() {
     try {
         const response = await fetch('/chain');
         const data = await response.json();
-        
+
         const blockchainDiv = document.getElementById('blockchainData');
         blockchainDiv.innerHTML = '';
 
@@ -98,7 +152,7 @@ async function refreshChain() {
                         ${block.transactions.map(tx => `
                             <li class="mb-2">
                                 <small>
-                                    ${tx.sender} → ${tx.recipient}: ${tx.amount}
+                                    ${tx.sender} → ${tx.recipient}: ${tx.amount} SCR
                                 </small>
                             </li>
                         `).join('')}
@@ -116,7 +170,7 @@ async function validateChain() {
     try {
         const response = await fetch('/chain/valid');
         const data = await response.json();
-        
+
         const statusDiv = document.getElementById('chainStatus');
         if (data.valid) {
             statusDiv.className = 'alert alert-success';

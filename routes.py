@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "default_secret_key")
 
-# Initialize blockchain
-blockchain = Blockchain(difficulty=4)
+# Initialize blockchain with lower difficulty for ~30s blocks
+blockchain = Blockchain(difficulty=2)
 
 @app.route('/')
 def index():
@@ -25,6 +25,15 @@ def get_chain():
         'length': len(chain_data)
     })
 
+@app.route('/balance/<address>', methods=['GET'])
+def get_balance(address):
+    balance = blockchain.get_balance(address)
+    return jsonify({
+        'address': address,
+        'balance': balance,
+        'unit': 'SCR'
+    })
+
 @app.route('/transaction/new', methods=['POST'])
 def new_transaction():
     try:
@@ -34,13 +43,16 @@ def new_transaction():
         if not all(k in values for k in required):
             return jsonify({'error': 'Missing required fields'}), 400
 
-        blockchain.add_transaction(
-            values['sender'],
-            values['recipient'],
-            float(values['amount'])
-        )
+        try:
+            blockchain.add_transaction(
+                values['sender'],
+                values['recipient'],
+                float(values['amount'])
+            )
+            return jsonify({'message': 'Transaction added successfully'}), 201
+        except ValueError as ve:
+            return jsonify({'error': str(ve)}), 400
 
-        return jsonify({'message': 'Transaction added successfully'}), 201
     except Exception as e:
         logger.error(f"Error in new_transaction: {str(e)}")
         return jsonify({'error': 'Failed to add transaction'}), 500
@@ -54,11 +66,8 @@ def mine():
 
         new_block = blockchain.mine_pending_transactions(values['miner_address'])
 
-        if not new_block:
-            return jsonify({'message': 'No pending transactions to mine'}), 200
-
         response = {
-            'message': 'New block mined',
+            'message': f'New block mined! Earned: {blockchain.mining_reward} SCR',
             'block': {
                 'index': new_block.index,
                 'transactions': new_block.transactions,
