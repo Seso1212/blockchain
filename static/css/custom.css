@@ -1,0 +1,36 @@
+.card {
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.card-header {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+#blockchainData .card {
+    transition: all 0.3s ease;
+}
+
+#blockchainData .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.overflow-auto {
+    scrollbar-width: thin;
+    scrollbar-color: var(--bs-secondary) var(--bs-dark);
+}
+
+.overflow-auto::-webkit-scrollbar {
+    width: 8px;
+}
+
+.overflow-auto::-webkit-scrollbar-track {
+    background: var(--bs-dark);
+}
+
+.overflow-auto::-webkit-scrollbar-thumb {
+    background-color: var(--bs-secondary);
+    border-radius: 4px;
+}
