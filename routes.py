@@ -1,13 +1,15 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, make_response
 import logging
 import os
 from blockchain import Blockchain
+from flask_cors import CORS
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for frontend integration
 app.secret_key = os.environ.get("SESSION_SECRET", "default_secret_key")
 
 # Initialize blockchain with lower difficulty for ~30s blocks
@@ -86,3 +88,43 @@ def mine():
 def validate_chain():
     is_valid = blockchain.is_chain_valid()
     return jsonify({'valid': is_valid})
+
+# API for Scrappy Miner Integration
+@app.route('/api/wallet/create', methods=['POST'])
+def create_wallet():
+    try:
+        values = request.get_json()
+        if not values or 'address' not in values:
+            return jsonify({'error': 'Missing wallet address'}), 400
+
+        address = values['address']
+        # Initialize wallet in blockchain with 0 balance
+        blockchain.initialize_wallet(address)
+
+        return jsonify({
+            'address': address,
+            'balance': 0,
+            'message': 'Wallet created successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error creating wallet: {str(e)}")
+        return jsonify({'error': 'Failed to create wallet'}), 500
+
+@app.route('/api/mining/start', methods=['POST'])
+def start_mining():
+    try:
+        values = request.get_json()
+        if not values or 'address' not in values:
+            return jsonify({'error': 'Missing miner address'}), 400
+
+        # Mine a block and get mining reward
+        new_block = blockchain.mine_pending_transactions(values['address'])
+
+        return jsonify({
+            'success': True,
+            'reward': blockchain.mining_reward,
+            'new_balance': blockchain.get_balance(values['address'])
+        })
+    except Exception as e:
+        logger.error(f"Error starting mining: {str(e)}")
+        return jsonify({'error': 'Mining failed'}), 500

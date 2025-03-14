@@ -87,6 +87,11 @@ class Blockchain:
     def get_balance(self, address: str) -> float:
         return self.balances.get(address, 0)
 
+    def initialize_wallet(self, address: str) -> None:
+        """Initialize a new wallet with 0 balance if it doesn't exist"""
+        if address not in self.balances:
+            self.balances[address] = 0
+
     def proof_of_work(self, block: Block) -> Block:
         target = "0" * self.difficulty
 
