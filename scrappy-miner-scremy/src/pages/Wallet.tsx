@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useCrypto } from '@/contexts/CryptoContext';
 import { formatNumber, formatFloat } from '@/lib/miningUtils';
+import { toast } from '@/components/ui/use-toast';
+
 
 const Wallet = () => {
-  const { userData, addScr, convertScoinsToScr } = useCrypto();
+  const { userData, addScr, convertScoinsToScr, addTransaction } = useCrypto(); // Added addTransaction
   const { transactions, holdings, userStats } = userData;
   const [copied, setCopied] = useState(false);
   const [balance, setBalance] = useState(0);
@@ -24,7 +26,7 @@ const Wallet = () => {
   }, []);
 
   const generateWalletAddress = () => {
-    const address = '0x' + Array.from({ length: 40 }, () => 
+    const address = '0x' + Array.from({ length: 40 }, () =>
       Math.floor(Math.random() * 16).toString(16)
     ).join('');
     localStorage.setItem('wallet_address', address);
@@ -68,6 +70,102 @@ const Wallet = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const Transfer = () => {
+    const [toAddress, setToAddress] = useState('');
+    const [amount, setAmount] = useState('');
+    const [isTransferring, setIsTransferring] = useState(false);
+
+    const handleTransfer = async () => {
+      if (!amount || !toAddress) {
+        toast({
+          title: "Error",
+          description: "Please fill in all fields",
+          variant: "destructive",
+          duration: 3000,
+        });
+        return;
+      }
+
+      setIsTransferring(true);
+      try {
+        const response = await fetch('http://localhost:5000/api/transfer', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from_address: walletAddress,
+            to_address: toAddress,
+            amount: parseFloat(amount)
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error);
+        }
+
+        // Update balance after successful transfer
+        setBalance(data.new_balance);
+
+        // Add transaction to history
+        addTransaction({
+          type: 'send',
+          amount: parseFloat(amount),
+          symbol: 'SCR',
+          timestamp: Date.now(),
+          valueUsd: parseFloat(amount) * 0.15,
+          status: 'completed'
+        });
+
+        toast({
+          title: "Transfer Successful",
+          description: `Successfully sent ${amount} SCR`,
+          duration: 3000,
+        });
+
+        // Clear form
+        setToAddress('');
+        setAmount('');
+      } catch (error) {
+        toast({
+          title: "Transfer Failed",
+          description: error instanceof Error ? error.message : "Failed to send SCR",
+          variant: "destructive",
+          duration: 3000,
+        });
+      } finally {
+        setIsTransferring(false);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <h2 className="font-semibold">Send SCR</h2>
+        <div className="space-y-2">
+          <Input
+            placeholder="Recipient's Wallet Address"
+            value={toAddress}
+            onChange={(e) => setToAddress(e.target.value)}
+          />
+          <Input
+            type="number"
+            placeholder="Amount"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+          <Button
+            className="w-full"
+            onClick={handleTransfer}
+            disabled={isTransferring || !amount || !toAddress}
+          >
+            {isTransferring ? "Sending..." : "Send SCR"}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -101,7 +199,8 @@ const Wallet = () => {
               <Input value={walletAddress} readOnly className="font-mono text-xs" />
             </div>
           </div>
-
+          <Separator className="my-4" />
+          <Transfer />
           <div className="flex flex-col md:flex-row gap-4 pt-4">
             <Button className="flex-1 bg-scremy hover:bg-scremy-dark" asChild>
               <a href="/mining">
@@ -129,9 +228,9 @@ const Wallet = () => {
                   <div key={tx.id} className="flex items-center justify-between p-4">
                     <div className="flex items-center gap-4">
                       <div className={`p-2 rounded-full ${
-                        tx.type === 'mine' ? 'bg-scremy/10' : 
-                        tx.type === 'sell' ? 'bg-red-500/10' : 
-                        tx.type === 'convert' ? 'bg-amber-500/10' : 'bg-green-500/10'
+                        tx.type === 'mine' ? 'bg-scremy/10' :
+                          tx.type === 'sell' ? 'bg-red-500/10' :
+                            tx.type === 'convert' ? 'bg-amber-500/10' : 'bg-green-500/10'
                       }`}>
                         {tx.type === 'mine' ? (
                           <Pickaxe className="h-4 w-4 text-scremy" />
@@ -145,11 +244,11 @@ const Wallet = () => {
                       </div>
                       <div>
                         <p className="font-medium">{
-                          tx.type === 'mine' ? 'Mining Reward' : 
-                          tx.type === 'sell' ? 'Sell' : 
-                          tx.type === 'buy' ? 'Buy' : 
-                          tx.type === 'convert' ? 'Scoins Conversion' : 
-                          'Transfer'
+                          tx.type === 'mine' ? 'Mining Reward' :
+                            tx.type === 'sell' ? 'Sell' :
+                              tx.type === 'buy' ? 'Buy' :
+                                tx.type === 'convert' ? 'Scoins Conversion' :
+                                  'Transfer'
                         }</p>
                         <p className="text-sm text-muted-foreground flex items-center">
                           <Clock className="mr-1 h-3 w-3" />

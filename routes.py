@@ -128,3 +128,35 @@ def start_mining():
     except Exception as e:
         logger.error(f"Error starting mining: {str(e)}")
         return jsonify({'error': 'Mining failed'}), 500
+
+@app.route('/api/transfer', methods=['POST'])
+def transfer_scr():
+    try:
+        values = request.get_json()
+        required = ['from_address', 'to_address', 'amount']
+
+        if not all(k in values for k in required):
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        # Verify sender has sufficient balance
+        sender_balance = blockchain.get_balance(values['from_address'])
+        amount = float(values['amount'])
+
+        if sender_balance < amount:
+            return jsonify({'error': 'Insufficient balance'}), 400
+
+        # Add transaction to blockchain
+        blockchain.add_transaction(
+            values['from_address'],
+            values['to_address'],
+            amount
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Successfully transferred {amount} SCR',
+            'new_balance': blockchain.get_balance(values['from_address'])
+        })
+    except Exception as e:
+        logger.error(f"Error in transfer: {str(e)}")
+        return jsonify({'error': 'Transfer failed'}), 500
