@@ -31,31 +31,70 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(DataService.isLoggedIn());
   const { toast } = useToast();
 
+  // Function to fetch wallet balance from blockchain
+  const fetchBalance = async (address: string) => {
+    try {
+      const response = await fetch(`http://localhost:5000/balance/${address}`);
+      const data = await response.json();
+      if (response.ok) {
+        return data.balance;
+      }
+      return 0;
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+      return 0;
+    }
+  };
+
+  // Function to start mining on blockchain
+  const startMining = async (address: string) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/mining/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ address })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        return data;
+      }
+      throw new Error(data.error);
+    } catch (error) {
+      console.error('Error starting mining:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
-    const updatedData = DataService.processPendingMining();
-    setUserData(updatedData);
-    
-    const interval = setInterval(() => {
-      const refreshedData = DataService.processPendingMining();
-      setUserData(refreshedData);
-    }, 60000);
-    
-    return () => clearInterval(interval);
+    const walletAddress = localStorage.getItem('wallet_address');
+    if (walletAddress) {
+      // Update balance from blockchain periodically
+      const updateBalance = async () => {
+        const balance = await fetchBalance(walletAddress);
+        const updatedHoldings = userData.holdings.map(h => 
+          h.symbol === 'SCR' ? { ...h, amount: balance } : h
+        );
+        setUserData(prev => ({ ...prev, holdings: updatedHoldings }));
+      };
+
+      updateBalance();
+      const interval = setInterval(updateBalance, 30000);
+      return () => clearInterval(interval);
+    }
   }, []);
 
   useEffect(() => {
     setUserData(DataService.initData());
-    
     const interval = setInterval(() => {
       const data = DataService.initData();
-      
       const updatedMarketData = data.marketData.map(coin => {
         const volatility = coin.symbol === 'BTC' ? 2 : coin.symbol === 'ETH' ? 1.8 : 2.5;
         const trend = (Math.random() - 0.48) * volatility;
         const priceChange = trend * Math.sqrt(30 / 86400);
         const newPrice = Math.max(coin.price * (1 + priceChange / 100), 0.00001);
         const change24h = coin.change24h * 0.997 + priceChange * 0.003;
-        
         return {
           ...coin,
           price: newPrice,
@@ -63,7 +102,6 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           lastUpdated: Date.now()
         };
       });
-      
       const updatedHoldings = data.holdings.map(holding => {
         const marketData = updatedMarketData.find(m => m.symbol === holding.symbol);
         const valueUsd = marketData ? marketData.price * holding.amount : holding.valueUsd;
@@ -72,17 +110,14 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           valueUsd
         };
       });
-      
       const updatedData = {
         ...data,
         marketData: updatedMarketData,
         holdings: updatedHoldings,
       };
-      
       DataService.saveData(updatedData);
       setUserData(updatedData);
     }, 30000);
-    
     return () => clearInterval(interval);
   }, []);
 
@@ -97,19 +132,16 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         isPhoneVerified: false,
         provider: 'email'
       });
-      
       const authData = DataService.getAuth();
       if (authData) {
         setAuth(authData);
         setIsAuthenticated(true);
       }
-      
       toast({
         title: "Registration Successful",
         description: "Your account has been created successfully",
         duration: 3000,
       });
-      
       return true;
     } catch (error) {
       toast({
@@ -128,13 +160,11 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (authResult) {
         setAuth(authResult);
         setIsAuthenticated(true);
-        
         toast({
           title: "Login Successful",
           description: "Welcome back to ScremyCoin!",
           duration: 3000,
         });
-        
         return true;
       } else {
         toast({
@@ -161,7 +191,6 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (authData) {
       setAuth(authData);
       setIsAuthenticated(true);
-      
       toast({
         title: "Login Successful",
         description: "Welcome back to ScremyCoin!",
@@ -174,7 +203,6 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     DataService.logoutUser();
     setAuth(null);
     setIsAuthenticated(false);
-    
     toast({
       title: "Logged Out",
       description: "You have been logged out successfully",
@@ -202,24 +230,48 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setUserData(updatedData);
   };
 
-  const addScr = (amount: number) => {
-    const currentScr = userData.holdings.find(h => h.symbol === 'SCR')?.amount || 0;
-    updateHolding('SCR', currentScr + amount);
-    
-    addTransaction({
-      type: 'mine',
-      amount,
-      symbol: 'SCR',
-      timestamp: Date.now(),
-      valueUsd: amount * DataService.getScrPrice(),
-      status: 'completed'
-    });
-    
-    toast({
-      title: "Mining Successful",
-      description: `You earned ${amount.toFixed(4)} SCR`,
-      duration: 3000,
-    });
+  const addScr = async (amount: number) => {
+    const walletAddress = localStorage.getItem('wallet_address');
+    if (!walletAddress) {
+      toast({
+        title: "Error",
+        description: "No wallet address found",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+
+    try {
+      // Start mining on blockchain
+      const result = await startMining(walletAddress);
+
+      // Update local state with new balance
+      const currentScr = result.new_balance;
+      updateHolding('SCR', currentScr);
+
+      addTransaction({
+        type: 'mine',
+        amount: result.reward,
+        symbol: 'SCR',
+        timestamp: Date.now(),
+        valueUsd: result.reward * 0.15, // Using fixed price for now
+        status: 'completed'
+      });
+
+      toast({
+        title: "Mining Successful",
+        description: `You earned ${result.reward.toFixed(4)} SCR`,
+        duration: 3000,
+      });
+    } catch (error) {
+      toast({
+        title: "Mining Failed",
+        description: error instanceof Error ? error.message : "Failed to mine SCR",
+        variant: "destructive",
+        duration: 3000,
+      });
+    }
   };
 
   const addScoins = (amount: number) => {
@@ -230,14 +282,12 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const { level, exp } = userData.userStats;
     const expRequired = calculateExpRequired(level);
     const newExp = exp + amount;
-    
     if (newExp >= expRequired && level < 10) {
       updateUserStats({
         level: level + 1,
         exp: newExp - expRequired,
         expRequired: calculateExpRequired(level + 1)
       });
-      
       toast({
         title: "Level Up!",
         description: `Congratulations! You've reached level ${level + 1}.`,
@@ -251,7 +301,6 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const resetData = () => {
     const freshData = DataService.resetData();
     setUserData(freshData);
-    
     toast({
       title: "Data Reset",
       description: "All your cryptocurrency data has been reset.",
@@ -270,12 +319,9 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       });
       return;
     }
-    
     const scrAmount = scoins / 100;
-    
     updateUserStats({ scoins: 0 });
     addScr(scrAmount);
-    
     addTransaction({
       type: 'convert',
       amount: scrAmount,
@@ -284,7 +330,6 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       valueUsd: scrAmount * DataService.getScrPrice(),
       status: 'completed'
     });
-    
     toast({
       title: "Conversion Successful",
       description: `Converted ${formatFloat(scoins, 2)} Scoins to ${formatFloat(scrAmount, 4)} SCR`,
@@ -294,7 +339,6 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const extendMiningDuration = () => {
     const { scoins } = userData.userStats;
-    
     if (scoins < 5) {
       toast({
         title: "Extension Failed",
@@ -304,11 +348,9 @@ export const CryptoProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       });
       return;
     }
-    
     try {
       const updatedData = DataService.extendMiningDuration(scoins);
       setUserData(updatedData);
-      
       toast({
         title: "Mining Extended",
         description: "Mining duration extended to 24 hours for 5 Scoins",

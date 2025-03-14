@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Clock, ArrowUpRight, ArrowDownRight, Copy, Check, Pickaxe, Repeat } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,28 +11,69 @@ const Wallet = () => {
   const { userData, addScr, convertScoinsToScr } = useCrypto();
   const { transactions, holdings, userStats } = userData;
   const [copied, setCopied] = useState(false);
-  
-  // Sample wallet address
-  const walletAddress = '0x' + Array.from({ length: 40 }, () => 
-    Math.floor(Math.random() * 16).toString(16)
-  ).join('');
-  
-  // SCR balance
-  const scrBalance = holdings.find(h => h.symbol === 'SCR')?.amount || 0;
-  
+  const [balance, setBalance] = useState(0);
+
+  // Get or generate wallet address
+  const walletAddress = localStorage.getItem('wallet_address') || generateWalletAddress();
+
+  useEffect(() => {
+    // Fetch initial balance from blockchain
+    fetchBalance();
+    // Create wallet if it doesn't exist
+    createWalletIfNeeded();
+  }, []);
+
+  const generateWalletAddress = () => {
+    const address = '0x' + Array.from({ length: 40 }, () => 
+      Math.floor(Math.random() * 16).toString(16)
+    ).join('');
+    localStorage.setItem('wallet_address', address);
+    return address;
+  };
+
+  const createWalletIfNeeded = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/wallet/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ address: walletAddress })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error);
+      }
+    } catch (error) {
+      console.error('Error creating wallet:', error);
+    }
+  };
+
+  const fetchBalance = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/balance/${walletAddress}`);
+      const data = await response.json();
+      if (response.ok) {
+        setBalance(data.balance);
+      }
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+    }
+  };
+
   // Copy address to clipboard
   const copyAddress = () => {
     navigator.clipboard.writeText(walletAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-  
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Wallet</h1>
       </div>
-      
+
       {/* Wallet Balance */}
       <Card>
         <CardHeader>
@@ -43,13 +83,13 @@ const Wallet = () => {
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4 bg-scremy/10 p-6 rounded-lg">
             <div className="text-5xl font-bold text-scremy">
-              {formatFloat(scrBalance, 4)} <span className="text-2xl">SCR</span>
+              {formatFloat(balance, 4)} <span className="text-2xl">SCR</span>
             </div>
             <div className="text-sm text-muted-foreground">
-              ≈ ${formatNumber(scrBalance * 0.15)}
+              ≈ ${formatNumber(balance * 0.15)}
             </div>
           </div>
-          
+
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">Your Wallet Address</p>
@@ -61,7 +101,7 @@ const Wallet = () => {
               <Input value={walletAddress} readOnly className="font-mono text-xs" />
             </div>
           </div>
-          
+
           <div className="flex flex-col md:flex-row gap-4 pt-4">
             <Button className="flex-1 bg-scremy hover:bg-scremy-dark" asChild>
               <a href="/mining">
@@ -76,32 +116,11 @@ const Wallet = () => {
           </div>
         </CardContent>
       </Card>
-      
-      {/* Debug section for demo */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Development Controls</CardTitle>
-          <CardDescription>Tools for demonstration purposes</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <Button onClick={() => addScr(1)}>
-              Add 1 SCR
-            </Button>
-            <Button onClick={() => addScr(10)}>
-              Add 10 SCR
-            </Button>
-            <Button onClick={() => addScr(100)}>
-              Add 100 SCR
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      
-      {/* Transactions History */}
+
+      {/* Transaction History */}
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Transaction History</h2>
-        
+
         <Card>
           <CardContent className="p-0">
             {transactions.length > 0 ? (
